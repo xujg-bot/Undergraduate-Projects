@@ -1,0 +1,86 @@
+########################################
+
+getwd()  ##查看工作目录
+
+setwd("E:/vehicleinsurancecourse") ##设置工作目录位置
+
+rm(list = ls()) ##清除内存中所有的变量
+
+Ctrl+l##清屏
+
+set.seed() ##设定种子
+
+#######################################
+
+cardata=read.csv("car.csv",stringsAsFactors = TRUE)
+cardata$clm<-as.factor(cardata$clm)
+
+###########训练集和测试集#################
+set.seed(1)
+train_index <- sample(67856,47499)
+traindata <-cardata[train_index,]
+testdata <- cardata[-train_index,]
+
+
+##################KNN#################
+#install.packages("kknn")
+library(kknn)
+
+pred  <- kknn(clm~veh_value+veh_body+veh_age+gender+area+agecat,traindata,testdata,k=7,distance = 2,scale=TRUE)
+
+##################混淆矩阵###############
+pred_clm<-fitted(pred)
+table<-table(pred_clm,testdata$clm,dnn=c("预测值","真实值"))
+(Accuray <- (table[1,1]+table[2,2])/sum(table))
+(Error_rate <- (table[2,1]+table[1,2])/sum(table))
+(Sensitivity <- table[2,2]/(table[1,2]+table[2,2]))
+(Specificity <- table[1,1]/(table[1,1]+table[2,1]))
+(Recall <- table[2,2]/(table[2,1]+table[2,2]))
+
+
+##################ROC和AUC##############
+# install.packages("ROCR")
+library(ROCR)
+
+pred_prob <- pred$prob[,2]
+pred_object <- prediction(pred_prob,testdata$clm)  # define a prediction object
+perf <- performance(pred_object, measure = "tpr", x.measure = "fpr")  # define a performance object   
+plot(perf, main="ROC Curve (Test Set)",lwd=2, col="blue",xlab="1-Specificity",ylab="Sensitivity")  
+abline(0,1) # add 45 degree line
+
+auc_test <- performance(pred_object,'auc')
+unlist(slot(auc_test,"y.values"))
+
+##################ROC和AUC##############
+
+#install.packages("pROC")
+library(pROC)
+
+roc(testdata$clm, pred_prob, plot=TRUE, print.thres=TRUE, print.auc=TRUE)
+
+knn_roc <- roc(testdata$clm,pred_prob)
+plot(knn_roc, print.auc=TRUE, auc.polygon=TRUE, grid=c(0.1, 0.2),grid.col=c("green", "red"), max.auc.polygon=TRUE,auc.polygon.col="skyblue", print.thres=TRUE,main='knn算法ROC曲线')
+
+##################K的选择##############
+Kmax<-20
+
+test_sensitivity <- numeric(Kmax)
+
+pb <- txtProgressBar(style=3) ## 新建一个进度条
+star_time <- Sys.time() ## 记录程序开始时间
+for (i in 1:Kmax){
+  test_pred <- kknn(clm~veh_value+veh_body+veh_age+gender+area+agecat,traindata,testdata,k=i,distance = 2,scale=TRUE)
+  test_pred_clm<-fitted(test_pred)
+  test_table<-table(test_pred_clm,testdata$clm)
+  test_sensitivity[i] <- test_table[2,2]/(test_table[1,2]+test_table[2,2])
+  setTxtProgressBar(pb, i/Kmax) ## 实时反映进度
+ }
+end_time <- Sys.time()  ## 记录程序结束时间
+close(pb) ##关闭度条
+
+max(test_sensitivity)
+which.max(test_sensitivity)
+
+plot(1:20,test_sensitivity,type="b",xlab="K",ylab="Sensitivity",main="Test Set Sensitivity") 
+
+

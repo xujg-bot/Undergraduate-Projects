@@ -1,0 +1,156 @@
+
+###############数据读入##################
+import pandas as pd
+import numpy as np
+cardata= pd.read_csv('car.csv')
+
+cardata.shape
+
+pd.options.display.max_columns = 10
+cardata.head()
+
+###############数据信息##################
+cardata.info()
+cardata.describe()
+
+pd.crosstab(cardata.gender, cardata.clm)
+pd.crosstab(cardata.gender, cardata.clm,normalize='index')
+pd.crosstab(cardata.agecat, cardata.clm,normalize='index')
+
+
+###############训练集测试集##################
+from sklearn.model_selection import train_test_split
+import statsmodels.api as sm
+from patsy import dmatrices
+
+cardata['clm']=cardata['clm'].map(str)
+cardata['veh_age']=cardata['veh_age'].map(str)
+cardata['agecat']=cardata['agecat'].map(str)
+
+traindata, testdata =  train_test_split(cardata, test_size=0.3, stratify=cardata.clm, random_state=0)
+
+###############哑变量处理##################
+y_train, X_train = dmatrices('clm ~ veh_value+veh_body+veh_age+gender+area+agecat', data=traindata, return_type='dataframe')
+
+pd.options.display.max_columns = 30
+X_train.head()
+
+y_train.head()
+y_train = y_train.iloc[:,1]
+
+y_test, X_test = dmatrices('clm ~ veh_value+veh_body+veh_age+gender+area+agecat', data=testdata, return_type='dataframe')
+y_test = y_test.iloc[:,1]
+
+model = sm.Logit(y_train, X_train)
+results = model.fit()
+results.params
+np.exp(results.params)   # Odds ratio
+results.summary()
+
+#################### Training error##############
+
+table = results.pred_table()  # Confusion matrix for training set
+table
+
+Accuracy = (table[0, 0] + table[1, 1]) / np.sum(table)
+Accuracy
+
+Error_rate = 1 - Accuracy
+Error_rate
+
+Sensitivity  = table[1, 1] / (table[1, 0] + table[1, 1])
+Sensitivity
+
+Specificity = table[0, 0] / (table[0, 0] + table[0, 1])
+Specificity
+
+Recall = table[1, 1] / (table[0, 1] + table[1, 1])
+Recall
+
+###################Test error################
+
+prob = results.predict(X_test)
+pred = (prob >= 0.1)
+table = pd.crosstab(y_test, pred, colnames=['Predicted'])
+table
+
+table = np.array(table)   # Change pandas DataFrame to numpy array
+
+Accuracy = (table[0, 0] + table[1, 1]) / np.sum(table)
+Accuracy
+
+Error_rate = 1 - Accuracy
+Error_rate
+
+Sensitivity  = table[1, 1] / (table[1, 0] + table[1, 1])
+Sensitivity
+
+Specificity = table[0, 0] / (table[0, 0] + table[0, 1])
+Specificity
+
+Recall = table[1, 1] / (table[0, 1] + table[1, 1])
+Recall
+
+#################### Use sklearn for Logit#################
+
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import classification_report
+from sklearn.metrics import cohen_kappa_score
+from sklearn.metrics import plot_roc_curve
+
+model =  LogisticRegression(C=1e10,class_weight='balanced', random_state=0)
+#model =  LogisticRegression(C=1e10,class_weight={0:0.9, 1:0.1}, random_state=0)
+model.fit(X_train, y_train)
+
+model.coef_
+results.params
+
+model.score(X_test, y_test) 
+
+prob = model.predict_proba(X_test)
+prob[:5]
+
+pred = model.predict(X_test)
+#pred = (prob[:,1] >= 0.5)
+pred[:5]
+
+confusion_matrix(y_test, pred)
+
+### Accuracy
+
+### For better formating,use pandas
+table = pd.crosstab(y_test, pred, rownames=['Actual'], colnames=['Predicted'])
+table
+
+table = np.array(table)   # Change pandas DataFrame to numpy array
+
+Accuracy = (table[0, 0] + table[1, 1]) / np.sum(table)
+Accuracy
+
+Error_rate = 1 - Accuracy
+Error_rate
+
+Sensitivity  = table[1, 1] / (table[1, 0] + table[1, 1])
+Sensitivity
+
+Specificity = table[0, 0] / (table[0, 0] + table[0, 1])
+Specificity
+
+Recall = table[1, 1] / (table[0, 1] + table[1, 1])
+Recall
+
+###  ROC and AUC
+
+plot_roc_curve(model, X_test, y_test)
+x = np.linspace(0, 1, 100)
+plt.plot(x, x, 'k--', linewidth=1)
+plt.title('ROC Curve (Test Set)')
+
+cohen_kappa_score(y_test, pred)
+
+
+
+
+

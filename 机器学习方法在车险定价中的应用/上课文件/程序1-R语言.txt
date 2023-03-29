@@ -1,0 +1,126 @@
+########################################
+
+getwd()  ##查看工作目录
+
+setwd("E:/vehicleinsurancecourse") ##设置工作目录位置
+
+rm(list = ls()) ##清除内存中所有的变量
+
+Ctrl+l##清屏
+
+set.seed() ##设定种子
+
+#################数据读入######################
+
+cardata=read.csv("car.csv",stringsAsFactors = TRUE)
+
+str(cardata)
+
+#################数据信息#######################
+This data set is based on  one-year vehicle insurance policies taken out in 2004 or 2005. 
+There are 67856 policies, of which  4624 (6.8%) had at least one claim. 
+
+Variables:
+veh_value: vehicle value, in $10,000s
+exposure: 0-1
+clm: occurrence of claim (0 = no, 1 = yes)
+numclaims: number of claims
+claimcst0: claim amount (0 if no claim)
+veh_body: vehicle body, coded as
+              BUS
+              CONVT = convertible  
+              COUPE   
+              HBACK = hatchback                  
+              HDTOP = hardtop
+              MCARA = motorized caravan
+              MIBUS = minibus
+              PANVN = panel van
+              RDSTR = roadster
+              SEDAN    
+              STNWG = station wagon
+              TRUCK           
+              UTE = utility
+veh_age: age of vehicle: 1 (youngest), 2, 3, 4
+gender: gender of driver: M, F
+area: driver's area of residence: A, B, C, D, E, F
+agecat: driver's age category: 1 (youngest), 2, 3, 4, 5, 6
+###############数据处理#########################
+
+cardata$clm<-as.factor(cardata$clm)
+
+str(cardata$clm)
+
+prop.table(table(cardata$clm))
+
+prop.table(table(cardata$gender,cardata$clm),margin=1)
+
+cardata$veh_age<-as.factor(cardata$veh_age)
+cardata$agecat<-as.factor(cardata$agecat)
+
+###########训练集和测试集#################
+
+set.seed(1)
+train_index <- sample(67856,47499)
+traindata <-cardata[train_index,]
+testdata <- cardata[-train_index,]
+
+# ###############glm() fits generalized linear model
+################ "family=binomial" gives logit regression
+
+fit <- glm(clm~veh_value+veh_body+veh_age+gender+area+agecat,data=traindata,family=binomial,offset=log(exposure))  
+summary(fit)
+
+################### Pseudo R2##############
+
+names(fit)
+PseudoR2<-(fit$null.deviance-fit$deviance)/fit$null.deviance
+
+######## Report confidence interval and odds-ratio##
+
+# coef(fit) ##点估计
+# confint(fit)  ## 区间估计
+# exp(coef(fit))
+
+#################### Training error##########
+
+prob_train <- predict(fit,type="response")  # predict probability in training set
+pred_train <- prob_train > 0.3
+table <- table(Predicted=pred_train,Actual=traindata$clm)
+table
+
+(Accuracy <- (table[1,1]+table[2,2])/sum(table))
+(Error_rate <- (table[2,1]+table[1,2])/sum(table))
+(Sensitivity <- table[2,2]/(table[1,2]+table[2,2]))
+(Specificity <- table[1,1]/(table[1,1]+table[2,1]))
+(Recall <- table[2,2]/(table[2,1]+table[2,2]))
+
+# ##################Test error############
+
+prob_test <- predict(fit,type="response",newdata=testdata)  # predict probability in test set
+pred_test <- prob_test > 0.1
+table <- table(Predicted=pred_test,Actual=testdata$clm)
+table
+(Accuray <- (table[1,1]+table[2,2])/sum(table))
+(Error_rate <- (table[2,1]+table[1,2])/sum(table))
+(Sensitivity <- table[2,2]/(table[1,2]+table[2,2]))
+(Specificity <- table[1,1]/(table[1,1]+table[2,1]))
+(Recall <- table[2,2]/(table[2,1]+table[2,2]))
+
+##################ROC和AUC##############
+
+# install.packages("ROCR")
+library(ROCR)
+
+pred_object <- prediction(prob_test,testdata$clm)  # define a prediction object
+perf <- performance(pred_object, measure = "tpr", x.measure = "fpr")  # define a performance object   
+plot(perf, main="ROC Curve (Test Set)",lwd=2, col="blue",xlab="1-Specificity",ylab="Sensitivity")  
+abline(0,1) # add 45 degree line
+
+auc_test <- performance(pred_object,'auc')
+unlist(slot(auc_test,"y.values"))
+
+##################科恩Kappa##############
+# install.packages("vcd")
+library(grid)
+library(vcd)
+Kappa(table)

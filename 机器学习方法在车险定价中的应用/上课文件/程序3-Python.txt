@@ -1,0 +1,135 @@
+###############模块导入##################
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold, StratifiedKFold
+from sklearn.model_selection import GridSearchCV
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.metrics import cohen_kappa_score
+
+###############数据读入##################
+
+cardata= pd.read_csv('car.csv')
+
+###############数据信息##################
+cardata.clm.value_counts()
+cardata.clm.value_counts(normalize=True)
+
+###############哑变量处理#################
+cardata['clm']=cardata['clm'].map(str)
+X_raw = cardata.iloc[:, [0,5,6,7,8,9]]
+X = pd.get_dummies(X_raw)
+y = cardata.iloc[:, 2]
+
+###############训练集和测试集##############
+X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, test_size=20000, random_state=1)
+
+###############分类树####################
+model = DecisionTreeClassifier(max_depth=2, class_weight='balanced', random_state=123)
+model.fit(X_train, y_train)
+model.score(X_test, y_test)
+plot_tree(model, feature_names=X.columns, node_ids=True, rounded=True, precision=2)
+
+pred = model.predict(X_test)
+table = pd.crosstab(y_test, pred, rownames=['Actual'], colnames=['Predicted'])
+table
+
+table = np.array(table)   # Change pandas DataFrame to numpy array
+
+Accuracy = (table[0, 0] + table[1, 1]) / np.sum(table)
+Accuracy
+
+Error_rate = 1 - Accuracy
+Error_rate
+
+Sensitivity  = table[1, 1] / (table[1, 0] + table[1, 1])
+Sensitivity
+
+Specificity = table[0, 0] / (table[0, 0] + table[0, 1])
+Specificity
+
+Recall = table[1, 1] / (table[0, 1] + table[1, 1])
+Recall
+
+#########Graph total impurities versus ccp_alphas############
+model = DecisionTreeClassifier(class_weight='balanced', random_state=123)
+path = model.cost_complexity_pruning_path(X_train, y_train)
+
+plt.plot(path.ccp_alphas, path.impurities, marker='o', drawstyle='steps-post')
+plt.xlabel('alpha (cost-complexity parameter)')
+plt.ylabel('Total Leaf Impurities')
+plt.title('Total Leaf Impurities vs alpha for Training Set')
+
+max(path.ccp_alphas),  max(path.impurities)
+
+##########Choose optimal ccp_alpha via CV#################
+rangeccpalpha=np.linspace(0.000001, 0.0001, 10, endpoint=True)
+param_grid = {'ccp_alpha': rangeccpalpha}
+kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=1)
+model = GridSearchCV(DecisionTreeClassifier(max_depth=5, class_weight='balanced', random_state=123), param_grid, cv=kfold)
+model.fit(X_train, y_train)
+
+model.best_params_
+model = model.best_estimator_
+model.score(X_test, y_test)     
+
+plot_tree(model, feature_names=X.columns, node_ids=True, impurity=True, proportion=True, rounded=True, precision=2)
+
+############Feature importance############################
+model.feature_importances_
+
+sorted_index = model.feature_importances_.argsort()
+plt.barh(range(X_train.shape[1]), model.feature_importances_[sorted_index])
+plt.yticks(np.arange(X_train.shape[1]), X_train.columns[sorted_index])
+plt.xlabel('Feature Importance')
+plt.ylabel('Feature')
+plt.title('Decision Tree')
+plt.tight_layout()
+
+
+############ Prediction Performance ###########################
+     
+pred = model.predict(X_test)
+table = pd.crosstab(y_test, pred, rownames=['Actual'], colnames=['Predicted'])
+table
+
+table = np.array(table)
+Accuracy = (table[0, 0] + table[1, 1]) / np.sum(table)
+Accuracy
+
+Sensitivity  = table[1, 1] / (table[1, 0] + table[1, 1])
+Sensitivity
+
+cohen_kappa_score(y_test, pred)
+
+##########Use a different threshold for prediction###################
+
+prob = model.predict_proba(X_test)
+prob
+model.classes_
+
+prob_1 = prob[:, 1]
+pred_new = (prob_1 >= 0.1)
+
+table = pd.crosstab(y_test, pred_new, rownames=['Actual'], colnames=['Predicted'])
+table
+
+table = np.array(table)
+Accuracy = (table[0, 0] + table[1, 1]) / np.sum(table)
+Accuracy
+
+Sensitivity  = table[1, 1] / (table[1, 0] + table[1, 1])
+Sensitivity
+
+############ Entropy criterion######################################
+rangeccpalpha=np.linspace(0.000001, 0.0001, 10, endpoint=True)
+param_grid = {'ccp_alpha': rangeccpalpha}
+kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=1)
+model = GridSearchCV(DecisionTreeClassifier(criterion='entropy', random_state=123), param_grid, cv=kfold)
+
+model.fit(X_train, y_train)     
+model.score(X_test, y_test)
+
+pred = model.predict(X_test)
+pd.crosstab(y_test, pred, rownames=['Actual'], colnames=['Predicted'])
